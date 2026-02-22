@@ -11,5 +11,3 @@ func ExampleHello() {
     // Output:
     // Hello from Go project in Jenkins!
 }
-EOF
-
