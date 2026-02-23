@@ -1,0 +1,38 @@
+pipeline {
+    agent any 
+    stages {
+        stage('Build & Test') {
+            agent {
+                docker {
+                    image 'golang:1.21.6'
+                    args '-u 0:0 -v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
+            steps {
+                git branch: 'main', url: 'https://github.com/michaelkoch51/fops46kochmichel.git'
+                sh 'go test ./...'
+                sh 'CGO_ENABLED=0 go build -buildvcs=false -o app .'
+                
+                // ИСПРАВЛЕНИЕ: Возвращаем права на файлы текущему пользователю хоста
+                sh 'chown -R $(stat -c "%u:%g" .) .'
+                
+                stash name: 'app-files', includes: 'app, Dockerfile'
+            }
+        }
+        stage('Docker Build') {
+            agent any 
+            steps {
+                script {
+                    // Теперь unstash пройдет без ошибок доступа
+                    unstash 'app-files'
+                    docker.build("my-app:${env.BUILD_ID}")
+                }
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs(notFailBuild: true)
+        }
+    }
+}

@@ -1,0 +1,44 @@
+pipeline {
+    agent any
+
+    environment {
+        // Укажите ВАШ реальный IP сервера вместо 127.0.0.1, если Jenkins в Docker
+        NEXUS_URL = "http://127.0.0.1:8081"
+        CREDENTIALS_ID = "nexus-credentials"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                // Удаляем старые файлы и скачиваем заново
+                deleteDir()
+                // ЗАМЕНИТЕ ссылку на ваш репозиторий!
+                sh "git clone https://github.com/michaelkoch51/fops46kochmichel.git ."
+            }
+        }
+
+        stage('Build binary') {
+            steps {
+                script {
+                    sh 'ls -la' // Проверяем, что файлы скачались
+                    sh """
+                        export GO111MODULE=on
+                        go mod tidy || true
+                        go build -o myapp .
+                    """
+                }
+            }
+        }
+
+        stage('Upload to Nexus') {
+            steps {
+                script {
+                    // Важно: в Nexus путь должен включать имя репозитория (например, /repository/maven-releases/)
+                    withCredentials([usernamePassword(credentialsId: env.CREDENTIALS_ID, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                        sh "curl -v -u ${USER}:${PASS} --upload-file myapp ${NEXUS_URL}/repository/raw-hosted/myapp-${BUILD_NUMBER}"
+                    }
+                }
+            }
+        }
+    }
+}

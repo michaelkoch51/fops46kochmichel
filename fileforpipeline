@@ -1,0 +1,48 @@
+pipeline {
+    agent any 
+    stages {
+        stage('Build & Test') {
+            agent {
+                docker {
+                    image 'golang:1.21.6'
+                    // Используем root для прав доступа к сокету и файлам
+                    args '-u 0:0 -v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
+            steps {
+                // ВАШ ИСПРАВЛЕННЫЙ URL:
+                git branch: 'main', url: 'https://github.com/michaelkoch51/fops46kochmichel.git'
+                
+                sh 'go test ./...'
+                sh 'CGO_ENABLED=0 go build -buildvcs=false -o app .'
+                
+                // Сохраняем бинарник и Dockerfile для следующего этапа
+                stash name: 'app-files', includes: 'app, Dockerfile'
+            }
+        }
+        stage('Docker Build') {
+            agent any 
+            steps {
+                script {
+                    // Возвращаем файлы, собранные в Go-контейнере
+                    unstash 'app-files'
+                    
+                    // Собираем образ. Убедитесь, что плагин Docker Pipeline установлен
+                    def myImage = docker.build("my-app:${env.BUILD_ID}")
+                    
+                    // Раскомментируйте ниже для пуша в реестр
+                    /*
+                    docker.withRegistry('https://your-registry-url', 'your-credentials-id') {
+                        myImage.push()
+                    }
+                    */
+                }
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs(notFailBuild: true)
+        }
+    }
+}
